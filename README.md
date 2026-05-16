@@ -6,7 +6,7 @@ Lean specs. Failing tests. Fresh contexts. Adversarial review. Verification befo
 
 ---
 
-AI agents write code fast. They also introduce security flaws at 2-3x the human rate, suppress errors silently, hallucinate APIs that don't exist, and produce implementations that pass every test on Monday and fall apart in production on Tuesday. The models are getting better. The failure modes are not going away.
+AI agents write code fast. They also suppress errors silently, hallucinate APIs that don't exist, and produce implementations that pass every test on Monday and fall apart in production on Tuesday. The models are getting better. The failure modes are not going away.
 
 GRIT is the quality-control system that makes agentic coding actually work. Not "write better prompts" advice. Not a prompt library. A loop for shipping AI-generated code that holds up under real traffic and real users.
 
