@@ -10,15 +10,16 @@ Lean specs. Failing tests. Fresh contexts. Adversarial review. Verification befo
 
 - [What this is](#what-this-is)
 - [Who this is for](#who-this-is-for)
-- [What this is not](#what-this-is-not)
-- [1. The Loop: Spec -> Test -> Implement -> Review -> Ship](#1-the-loop-spec---test---implement---review---ship)
+- [1. The Loop: Spec -> Test -> Implement -> Review -> Harden -> Ship](#1-the-loop-spec---test---implement---review---harden---ship)
 - [2. Context Hygiene](#2-context-hygiene)
-- [3. AI/LLM Coding Patterns](#3-aillm-coding-patterns)
+- [3. Agent Constraints](#3-agent-constraints)
 - [4. Architecture Principles](#4-architecture-principles)
 - [5. Testing Strategy](#5-testing-strategy)
 - [6. Version Control Workflow](#6-version-control-workflow)
 - [7. Security Checklist](#7-security-checklist)
-- [8. Shipping Rules](#8-shipping-rules)
+- [8. Multi-Agent Orchestration](#8-multi-agent-orchestration)
+- [9. Dependency Governance](#9-dependency-governance)
+- [10. Feedback Loops](#10-feedback-loops)
 
 ---
 
@@ -37,7 +38,8 @@ The loop:
 3. **Implement** - give the AI the spec and tests; its job is to make them pass.
 4. **Review** - use a fresh context, ideally with a different model, to attack the result.
 5. **Route findings** - send each problem back to the phase that caused it.
-6. **Ship** - only after the change survives verification.
+6. **Harden** - check non-functional requirements the AI did not add.
+7. **Ship** - only after the change survives verification.
 
 The spec is your leverage. A clear spec gives the AI less room to improvise. A vague spec makes you debug assumptions you never meant to approve.
 
@@ -57,31 +59,30 @@ It is especially useful when the AI is doing more than autocomplete: creating fe
 
 ---
 
-## What this is not
-
-GRIT is not:
-
-- A prompt pack.
-- A benchmark or model ranking.
-- A replacement for engineering judgment.
-- A waterfall process with AI stapled onto it.
-- A reason to skip human ownership, security review, or product review.
-- A heavyweight process for every typo, copy edit, or tiny config change.
-- A guarantee that AI-generated code is safe.
-
-The point is not to make AI coding ceremonial. The point is to make it inspectable.
-
----
-
-## 1. The Loop: Spec -> Test -> Implement -> Review -> Ship
+## 1. The Loop: Spec -> Test -> Implement -> Review -> Harden -> Ship
 
 Every non-trivial feature follows this cycle.
 
 ```text
-SPEC -> TEST -> IMPLEMENT -> REVIEW -> SHIP
-  ^                                      |
-  |________ route findings back _________|
+SPEC -> TEST -> IMPLEMENT -> REVIEW -> HARDEN -> SHIP
+  ^                                                |
+  |_____________ route findings back ______________|
 ```
+
+### Step 0: Challenge the Premise
+
+Before writing a spec, answer these four questions in one line each. Write the answers at the top of the spec file — they take 60 seconds and they prevent the most expensive class of bug: a well-implemented feature that should not exist.
+
+```text
+PROBLEM: [What problem does this solve? For whom? How do they solve it today?]
+SMALLEST: [Is this the smallest version that delivers value?]
+EXISTS: [Does this already exist in the codebase under a different name?]
+NULL CASE: [What happens if we do nothing?]
+```
+
+If you cannot answer PROBLEM in one sentence, you are not ready to spec. If EXISTS turns up an existing solution, you are done. If NULL CASE is "nothing bad happens," reconsider whether this belongs in the current sprint.
+
+Most of the time the answers confirm "yes, build it" and you move on. The written answers remain in the spec file as context for the next person (or agent) who asks "why does this exist?"
 
 ### Step 1: Spec
 
@@ -100,33 +101,27 @@ Example:
 ```text
 FEATURE: Order Total Calculator
 
-DOES:
-Takes line items and an optional discount code. Returns subtotal,
-discount, tax, and final total.
-
-INPUTS:
-{ items: LineItem[], discountCode?: string, taxRate: number }
-
-OUTPUTS:
-{ subtotal: number, discount: number, tax: number, total: number }
+DOES: Takes line items + optional discount code. Returns subtotal, discount, tax, total.
+INPUTS: { items: LineItem[], discountCode?: string, taxRate: number }
+OUTPUTS: { subtotal: number, discount: number, tax: number, total: number }
 
 EDGE CASES:
 - Empty items array returns all zeros.
 - Invalid discount code is ignored.
 - Negative quantity returns a validation error.
 
-DOES NOT:
-- Persist the order.
-- Validate inventory.
-- Charge payment.
+DOES NOT: Persist order. Validate inventory. Charge payment.
 
-NEEDS CLARIFICATION:
-- Should tax be calculated before or after discount?
+UNCLEAR: Should tax be calculated before or after discount?
 ```
 
-Resolve every blocking `NEEDS CLARIFICATION` marker before tests. If an open question does not block the first slice, write down the current assumption and continue.
+Resolve every blocking unclear item before tests. If an open question does not block the first slice, write down the current assumption and continue.
 
 Specs are living hypotheses, not waterfall gates. If implementation reveals a missing case, update the spec, add or revise the tests, then change the code. The spec becomes stronger because you built against it, not because you guessed perfectly upfront.
+
+The spec is authoritative for the current pass. If you discover it's wrong, stop and update the spec first — don't improvise around it.
+
+When requirements change mid-implementation — a flow reversal, a new constraint, a pivot in approach — stop building. Update the spec first, then update or add tests, then resume implementation. Do not patch code to match new requirements without cascading. An agent that patches without updating the spec leaves the next session with a lie as its starting point.
 
 ### Step 2: Test
 
@@ -164,17 +159,28 @@ Follow the spec exactly.
 Do not add features that are not in the spec.
 ```
 
+**Search first.** Before writing new code, the agent must search the codebase for existing patterns, utilities, or similar implementations to reuse. Creating duplicate code is the most common agent failure mode. If a helper already exists, use it. If a pattern is already established, follow it.
+
+**One logical change per pass.** Do not ask the agent to build an entire feature in a single shot. Each pass should be one coherent unit — a new endpoint with its types, handler, service, query, and tests counts as one unit even if it touches 12 files. The limit is not file count; it's whether the agent can hold the full change in context without contradicting itself or forgetting to propagate updates. When the scope is too large for the context window, split by vertical slice, not by arbitrary file limits.
+
 Use a fresh context for implementation when the prior conversation was long, exploratory, or full of failed attempts. Long conversations carry stale assumptions.
+
+### Document Decisions Mid-Build
+
+When you make a structural decision during implementation that was not in the original spec — choosing a data structure, picking an integration approach, deciding what NOT to build — write it down. One line: what you decided and why.
+
+Put it in the spec, a decisions section of the progress file, or a comment at the decision point in code. The format does not matter. What matters is that the next agent session can find it without having your conversation history.
+
+Undocumented decisions get relitigated. A future agent will see the code, not understand the tradeoff, and "improve" it back to something worse. The one-line note costs seconds. Rediscovery costs hours.
 
 ### Step 4: Review
 
-Use a fresh context for review. If possible, use a different model family than the one that wrote the code.
+Use a fresh context for review. Use the strongest model available — review is where reasoning quality matters most. If the strongest model happens to be a different family than the one that wrote the code, that's a bonus, but model strength beats model diversity every time.
 
-Why this helps:
+Why a fresh context helps:
 
 - The reviewer has no loyalty to the implementation.
 - Fresh context exposes assumptions the builder carried forward.
-- Different models often notice different classes of mistakes.
 
 Reviewer prompt:
 
@@ -210,7 +216,40 @@ Do not just patch the symptom. Trace the problem to the phase that created it. T
 
 A spec bug fixed only in code will come back later.
 
-### Step 6: Ship
+### Step 6: Harden
+
+AI reliably produces the functional 80% of a feature but misses non-functional requirements almost every time. Review catches logic bugs and spec violations. NFRs need their own pass because the AI will not add what you did not ask for.
+
+After implementation passes review, run a hardening pass. Not every item applies to every change — use judgment.
+
+**Quick checks** (configuration-level, minutes to add):
+
+- [ ] Rate limiting on new endpoints.
+- [ ] Timeout configuration for async operations.
+- [ ] Input sanitization at system boundaries.
+- [ ] Resource cleanup (connections, file handles, subscriptions).
+- [ ] Audit logging for state-changing operations.
+
+**Design checks** (require thought, may require rework):
+
+- [ ] Retry logic with backoff for external calls.
+- [ ] Graceful degradation when dependencies fail.
+- [ ] PII handling — is sensitive data logged, cached, or exposed?
+- [ ] Idempotency for operations that may be retried.
+- [ ] Concurrency safety — race conditions, deadlocks, duplicate processing. This is not a checkbox. If your feature has concurrent access to shared state, treat this as a design problem, not a line item.
+
+This can be a separate agent pass or a human review. Automate what you can with linters and static analysis. When a production incident traces back to a missing NFR, add it to the checklist. The checklist grows from failure, not from imagination.
+
+### Step 7: Ship
+
+**Verify before declaring done.** The agent cannot call work complete without proof. At minimum:
+
+1. All tests pass (run them, do not assume).
+2. Type checks pass.
+3. Linter passes.
+4. For user-facing changes: the feature works in the running app (not just in tests).
+
+No optimistic declarations of success. "I believe this should work" is not verification. "Tests pass, I checked the UI, here is what I confirmed" is verification.
 
 Ship after the code passes tests, checks, and adversarial review. Do not polish what does not need polishing. Do not expand scope at the finish line.
 
@@ -231,7 +270,7 @@ Rigor should be proportional to risk, complexity, and uncertainty. The loop is f
 
 ## 2. Context Hygiene
 
-Context quality strongly affects AI code quality. Treat context as a scarce resource.
+Context quality affects code quality. Treat context as scarce.
 
 ### Start Fresh for Each Feature
 
@@ -286,49 +325,13 @@ Do not edit files.
 
 The main agent stays focused on the feature instead of carrying every exploratory file read.
 
-### Parallelize Carefully
-
-Parallel agents are useful when tasks own different files:
-
-- One agent builds the API route.
-- One agent writes tests.
-- One agent builds the UI component.
-
-Do not parallelize when agents need to edit the same files, share database migrations, or touch lock files. Merge sequentially, rebase each branch on the latest main, then run the full test suite.
-
 ### Make the Repo Legible
 
 Every fresh AI session starts blind. Make orientation cheap.
 
 Keep a root context file such as `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, or `.windsurfrules`. Keep it short and human-written.
 
-Good context file shape:
-
-```markdown
-# Project Name
-
-## Commands
-- Build: `npm run build`
-- Test: `npm run test`
-- Lint: `npm run lint --fix`
-- Type check: `npx tsc --noEmit`
-- Single test: `npx vitest run src/path/to/test.ts`
-
-## Stack
-Next.js, TypeScript, Postgres, Drizzle, Vitest.
-
-## Read on demand
-- Architecture: `docs/architecture.md`
-- Database schema: `src/db/schema/`
-- Current progress: `PROGRESS.md`
-
-## Boundaries
-- Always run type check and relevant tests before done.
-- Ask first before schema migrations, new dependencies, or deleting files.
-- Never commit secrets or modify `.env` files.
-```
-
-Use the context file as a table of contents, not as a novel. Link to deeper docs instead of loading them into every session.
+Good context file shape: commands (build, test, lint), stack, pointers to deeper docs, and boundaries (what to ask before doing). Keep it under 50 lines. Use it as a table of contents, not a novel — link to deeper docs instead of inlining them.
 
 Good file names help too. A tree like `src/agents/router.ts`, `src/db/schema/users.ts`, and `src/prompts/onboarding.ts` teaches architecture faster than a paragraph that can go stale.
 
@@ -354,59 +357,7 @@ The next session should not have to rediscover what happened.
 
 ---
 
-## 3. AI/LLM Coding Patterns
-
-### Prefer Structured Outputs
-
-For LLM calls that return data, use tool calls, JSON mode, function calling, schemas, or another structured-output mechanism. Avoid parsing free text with regex.
-
-```typescript
-// Fragile
-const score = parseInt(response.content.match(/Score: (\d+)/)?.[1] ?? "0", 10)
-
-// Better
-const result = await model.generateObject({
-  schema: ScoreSchema,
-  prompt,
-})
-```
-
-Structured outputs fail loudly. Free-text parsing fails sideways.
-
-### Protect Against Prompt Injection
-
-Any feature that processes user-uploaded documents, URLs, web pages, or free text is handling untrusted input.
-
-Rules:
-
-1. Do not interpolate untrusted content into system prompts.
-2. Pass user content as separate messages or data fields.
-3. Validate LLM outputs before database writes or side effects.
-4. Separate read-only analysis from write-capable actions.
-5. Log prompts and responses where safe, with secrets and personal data redacted.
-
-```typescript
-// Bad
-system: `Analyze this document: ${userInput}`
-
-// Better
-system: "You are a document analyzer. Analyze the document provided by the user."
-messages: [{ role: "user", content: userInput }]
-```
-
-### Version Prompts
-
-Store important system prompts in versioned files, not scattered inline strings. Prompt changes are behavior changes. They should be diffable, reviewable, and reversible.
-
-### Choose Models Deliberately
-
-Pick models by capability, latency, cost, and risk:
-
-- Cheap/fast models for high-volume classification, extraction, and simple structured tasks.
-- Mid-tier models for routine coding, conversation, and moderate reasoning.
-- Strong models for complex architecture, security-sensitive changes, user-facing prose, or ambiguous debugging.
-
-Cache stable results. Set output limits tightly. Batch where it is safe.
+## 3. Agent Constraints
 
 ### Rules for AI-Generated Code
 
@@ -419,6 +370,29 @@ Bake these into prompts or project guidance:
 - Do not refactor unrelated code.
 - At system boundaries, validate aggressively.
 - Inside trusted internal code, avoid defensive clutter for states that cannot occur.
+
+### Non-Negotiable Constraints
+
+These are not suggestions. They prevent the most common and expensive agent failures. Enforce them in your rules file, pre-commit hooks, or both.
+
+- **Do not improve adjacent code.** Touch only what was asked. Do not "clean up" surrounding code, comments, or formatting. Orthogonal damage is the #1 source of unexpected regressions from agents.
+- **Do not suppress errors.** Never catch an exception and silently continue. Never replace an error with a default value unless the spec explicitly requires it. Suppressed errors become production mysteries.
+- **Do not create files unless necessary.** Prefer editing existing files. New files mean new imports, new test files, new mental overhead. Justify every new file.
+- **Do not hallucinate imports or APIs.** If you are unsure whether a function, module, or package exists, search for it. Do not guess and hope it compiles.
+- **Do not exceed scope.** If the spec says "add a discount field," do not also add a coupon system, a discount history table, and an admin UI for managing discounts.
+- **Do not guess. Ask.** When you encounter ambiguity — an unclear requirement, an architectural decision with multiple valid paths, an interface you are unsure exists — stop and ask. Do not pick a direction and hope it is right. A wrong guess costs more than the interruption of asking. This is non-negotiable.
+
+### Constrain Agents Programmatically
+
+The harness around an agent matters more than the prompt inside it. Treat agent permissions like you'd treat a service account.
+
+- Least privilege: scope what files, APIs, and tools each agent can touch.
+- Human gates on irreversible actions (DB writes, deployments, deletions).
+- Structured outputs for all tool calls. No free-text action parsing.
+- Explicit allowlists for which tools and APIs an agent can invoke.
+- Deterministic workflow engines for sequencing. Do not let agents decide execution order for multi-step operations.
+
+A well-constrained agent with a mediocre prompt is safer than an unconstrained agent with a perfect one.
 
 ---
 
@@ -517,21 +491,6 @@ test("returns valid structured output", async () => {
 })
 ```
 
-### Verify End to End
-
-AI-generated code often passes unit tests while failing in the actual app. For user-facing changes, run the app and verify the flow with Playwright, browser automation, or equivalent tooling.
-
-The minimum useful loop:
-
-1. Start the dev server.
-2. Navigate like a user.
-3. Click, type, submit, refresh.
-4. Inspect the rendered state.
-5. Capture screenshots on failure.
-6. Fix before calling the work done.
-
-"The tests pass" is good. "The feature works in the running app" is better.
-
 ---
 
 ## 6. Version Control Workflow
@@ -557,7 +516,7 @@ git worktree add ../project-feat-invitations feat/team-invitations
 git worktree add ../project-fix-discount fix/discount-rounding
 ```
 
-Each agent gets its own directory with its own branch checked out. No stashing, no context-switching, no lock file collisions. When the work is merged, clean up:
+Each agent gets its own directory with its own branch checked out. No stashing, no context switching, no lock file conflicts. When the work is merged, clean up:
 
 ```bash
 git worktree remove ../project-feat-invitations
@@ -593,35 +552,9 @@ fix stuff
 wip
 ```
 
-### Rebase Before Merge
-
-When multiple agents work in parallel, merge sequentially. After each merge, rebase the next branch on the updated main and run the full test suite.
-
-```bash
-git checkout feat/team-invitations
-git rebase main
-npm test
-# if green, merge
-git checkout main
-git merge feat/team-invitations
-
-# now rebase the next branch
-git checkout fix/discount-rounding
-git rebase main
-npm test
-```
-
-This catches integration issues one branch at a time instead of discovering them all at once in a broken main.
-
 ### Tag What the AI Wrote
 
-Some teams want to know which code was AI-generated. Options, from lightweight to heavy:
-
-- **Commit co-author**: add `Co-Authored-By: AI Agent <agent@tool>` to commit messages. Most tools do this automatically.
-- **PR labels**: tag pull requests with `ai-generated` or `ai-assisted`.
-- **Branch prefix**: `ai/feat/invitations` makes it visible in `git branch --list`.
-
-Pick one convention and stick with it. The goal is traceability, not ceremony.
+Mark AI-generated code for traceability: commit co-author lines, PR labels (`ai-generated`), or branch prefixes (`ai/feat/invitations`). Pick one convention and stick with it.
 
 ### Do Not Let Agents Push Directly
 
@@ -659,19 +592,140 @@ Before launch, and after any auth, payment, data model, or agent behavior change
 - [ ] Raw SQL uses parameterized queries.
 - [ ] Error messages do not leak internal details.
 
-Automate as much of this as possible. Manual checklists are the fallback, not the foundation.
+### Automated Security Gates
+
+Manual checklists are the fallback, not the foundation. Automate what you can.
+
+Minimum CI pipeline for AI-authored code:
+
+```bash
+# Static analysis (catches XSS, injection, insecure patterns)
+semgrep --config=auto src/
+
+# Secret scanning (catches hardcoded API keys, tokens, credentials)
+trufflehog filesystem --directory=. --only-verified
+
+# Dependency audit (catches known-vulnerable packages)
+npm audit --audit-level=high
+
+# Type checking (catches shape errors the agent introduced)
+npx tsc --noEmit
+```
+
+These run on every PR, not as a pre-launch ritual. If any gate fails, the PR does not merge. No exceptions for "I'll fix it later."
+
+The manual checklist above remains useful for design-level review (CORS policy, auth architecture, data access patterns) that static tools cannot catch.
 
 ---
 
-## 8. Shipping Rules
+## 8. Multi-Agent Orchestration
 
-1. Ship small changes.
-2. Spec non-trivial behavior before implementation.
-3. Test core paths, not cosmetics.
-4. Use fresh context for fresh work.
-5. Review AI-generated code adversarially.
-6. Cross-model review anything touching money, auth, or user data.
-7. Route findings back to spec, tests, or code.
-8. Do not abstract until the pattern is real.
-9. Verify user-facing features in the running app.
-10. Keep the repo legible for the next fresh session.
+Parallel agents are fast but dangerous without coordination. Agents must not edit the same files, and integration must be verified after the pieces come together.
+
+### Coordination Rules
+
+- Parallel agents must touch different files. Same-file edits require sequential work.
+- Use git worktrees, not branch switching, for parallel work. Each agent gets its own directory.
+- Limit to 6-10 parallel agents per developer before coordination overhead exceeds gains.
+- Merge sequentially: rebase each branch on updated main, run the full suite, then merge the next.
+
+### Task Decomposition Pattern
+
+For features that span multiple services or layers:
+
+```text
+1. Architecture agent: plans the cross-cutting change, assigns file ownership per agent.
+2. Implementation agents: each owns a vertical slice (API, worker, UI, etc.).
+3. Integration agent: wires the pieces together after individual slices pass tests.
+4. Review agent: fresh context, adversarial, sees the full assembled picture.
+```
+
+The architecture agent produces a plan. Implementation agents receive only their slice of the plan plus the interfaces they must obey. The integration agent reconciles.
+
+### Database Migrations With Agents
+
+Migrations are the highest-risk parallel operation. Rules:
+
+- Migration agent runs before implementation agents. Schema must exist before code that uses it.
+- Columns added as nullable first. Never add NOT NULL without a default on existing tables.
+- Indexes created concurrently where supported.
+- Data backfilled in batches in a separate step, not inside the migration itself.
+- One migration per branch. Multiple migrations in a single branch create rebase hell.
+
+### When Not to Parallelize
+
+Do not parallelize when:
+
+- Agents need to edit the same files.
+- Work requires shared database migrations.
+- Lock files will conflict (package managers, code generators).
+- The feature shape is still being discovered. Parallelize execution, not exploration.
+
+---
+
+## 9. Dependency Governance
+
+AI agents add packages freely. Without guardrails, your dependency tree bloats and your attack surface grows.
+
+### Rules
+
+- New dependencies require justification in the PR description. "It was convenient" is not justification.
+- Prefer stdlib or existing dependencies over new packages.
+- No packages with fewer than 1,000 weekly downloads unless manually vetted for security and maintenance.
+- Lock file changes get a dedicated review pass.
+- Agents must not add dependencies that duplicate capabilities already in the project.
+
+### Enforcement
+
+```bash
+# CI check: flag new dependencies
+git diff main -- package.json | grep '"+' | grep -v '"version"'
+```
+
+Options for stronger enforcement:
+
+- Maintain an allowlist of pre-approved packages for common needs.
+- Use tools like Socket, Snyk, or npm audit in CI to block known-vulnerable additions.
+- Require a second human approval for any PR that adds a new dependency.
+
+Before accepting any new package, verify: it does not duplicate existing capabilities, it is actively maintained, its transitive dependency count is reasonable, and it has no known vulnerabilities. If an existing dependency already covers the need, reject the addition.
+
+---
+
+## 10. Feedback Loops
+
+A static methodology rots. GRIT stays useful only if it evolves from real failures, not from hypothetical best practices.
+
+### Rules: Recurring Mistakes Become Constraints
+
+If an agent makes the same class of mistake twice, do not just fix the code. Update your rules file (CLAUDE.md, .cursorrules, AGENTS.md, or equivalent) so the agent cannot make that mistake again. The fix is upstream, not downstream.
+
+```text
+1. Review finds a problem (e.g., agent added a raw SQL query without parameterization).
+2. Fix the code in this PR.
+3. Check: has this type of mistake happened before?
+4. If yes: add an explicit rule to the project rules file.
+5. If the rule cannot be enforced by text alone: add a linter rule, pre-commit hook, or CI check.
+```
+
+### Specs: Track What Works
+
+Not all specs produce good first-pass implementations. Pay attention to which spec formats, levels of detail, and boundary definitions consistently give the agent what it needs on the first try. When a spec produces a clean implementation with no review findings, note what made it work. When a spec produces garbage, note what was missing.
+
+Over time you will learn your project's "spec minimum" — the amount of detail below which the agent guesses wrong. This threshold is different for every codebase and every type of change.
+
+### Process: Measure Whether It's Working
+
+Track at least informally:
+
+- How often do review findings route back to a spec problem vs. an implementation problem? If most findings are spec bugs, your specs need more rigor. If most are implementation bugs, your constraints or context may be insufficient.
+- How many correction cycles does a typical feature take before it ships? If the number is rising, something upstream is degrading.
+- Which review findings recur across projects? These are candidates for permanent additions to your rules file or CI pipeline.
+
+You do not need a dashboard. A monthly 10-minute look at "what kept breaking and why" is enough. The goal is to notice patterns before they become permanent tax.
+
+### Rules File Hygiene
+
+Add: constraints the agent violates repeatedly, patterns it does not discover on its own, boundaries it crosses under ambiguity. Skip: one-time contextual mistakes, style preferences a formatter handles, anything tests already catch.
+
+Keep rules files under 500 lines. Split into directory-scoped files if they grow past that. Review monthly — remove stale rules, promote recurring ones to automated checks.
