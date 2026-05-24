@@ -123,6 +123,30 @@ The spec is authoritative for the current pass. If you discover it's wrong, stop
 
 When requirements change mid-implementation — a flow reversal, a new constraint, a pivot in approach — stop building. Update the spec first, then update or add tests, then resume implementation. Do not patch code to match new requirements without cascading. An agent that patches without updating the spec leaves the next session with a lie as its starting point.
 
+### Diagram the Spec Before Building
+
+For features with multiple services, state transitions, or non-trivial data flow, ask the agent to produce a diagram from the spec before writing any implementation code. Use text-based formats (Mermaid, D2) that live in the repo alongside the spec.
+
+This is a diagnostic tool, not documentation. A diagram forces the agent to reason about structural relationships — service dependencies, state transitions, data flow direction — before it starts writing code. If the diagram comes back incoherent or incomplete, the spec has gaps. Catching those gaps in a diagram is far cheaper than catching them in a broken integration.
+
+```text
+Prompt:
+Before implementing, produce a Mermaid diagram from this spec showing
+[state transitions / data flow / service interactions].
+Do not write any code yet.
+```
+
+Useful diagram types by situation:
+
+| Situation | Diagram type | What it reveals |
+| --- | --- | --- |
+| Multi-step workflows | State machine | Invalid transitions, missing terminal states |
+| API integrations | Sequence diagram | Unclear ownership of calls, missing error paths |
+| Data model changes | Entity relationship | Broken references, missing constraints |
+| Service interactions | Flowchart | Ambiguous branching, circular dependencies |
+
+Skip this for simple CRUD, config changes, or anything where the data flow is obvious. The goal is to surface structural ambiguity in complex specs, not to generate diagrams for their own sake.
+
 ### Step 2: Test
 
 Write tests before implementation for any behavior that matters. Tests are the verification layer for code you did not personally write line by line.
@@ -164,6 +188,8 @@ Do not add features that are not in the spec.
 **One logical change per pass.** Do not ask the agent to build an entire feature in a single shot. Each pass should be one coherent unit — a new endpoint with its types, handler, service, query, and tests counts as one unit even if it touches 12 files. The limit is not file count; it's whether the agent can hold the full change in context without contradicting itself or forgetting to propagate updates. When the scope is too large for the context window, split by vertical slice, not by arbitrary file limits.
 
 Use a fresh context for implementation when the prior conversation was long, exploratory, or full of failed attempts. Long conversations carry stale assumptions.
+
+**Know when to bail out.** If the agent needs more than two correction cycles on a single task, stop and diagnose before trying again. Either the task is too large (the agent cannot hold all the moving parts in context), the spec is too vague (the agent is guessing to fill gaps), or the problem is a bad fit for the current model (complex state machines, subtle concurrency, nuanced protocol work). Split the task, enrich the spec, or write the hard part by hand. A third correction cycle almost never produces what the first two failed to.
 
 ### Document Decisions Mid-Build
 
@@ -359,28 +385,35 @@ The next session should not have to rediscover what happened.
 
 ## 3. Agent Constraints
 
-### Rules for AI-Generated Code
+### Severity Hierarchy
 
-Bake these into prompts or project guidance:
+Structure agent rules by severity so the agent knows what it can do freely, what requires a human gate, and what is never acceptable. Use this hierarchy in your rules file (CLAUDE.md, .cursorrules, AGENTS.md, or equivalent).
 
-- Make surgical changes.
-- Match the existing style.
-- Surface assumptions instead of silently choosing.
-- Do not add speculative flexibility.
-- Do not refactor unrelated code.
-- At system boundaries, validate aggressively.
-- Inside trusted internal code, avoid defensive clutter for states that cannot occur.
+**ALWAYS — do these without asking:**
 
-### Non-Negotiable Constraints
+- Run lint and affected tests before committing.
+- Match the existing code style and patterns.
+- Search the codebase before creating new files or utilities.
+- Make surgical changes — touch only what was asked.
+- At system boundaries, validate aggressively. Inside trusted internal code, avoid defensive clutter for states that cannot occur.
 
-These are not suggestions. They prevent the most common and expensive agent failures. Enforce them in your rules file, pre-commit hooks, or both.
+**ASK FIRST — stop and get human approval:**
 
-- **Do not improve adjacent code.** Touch only what was asked. Do not "clean up" surrounding code, comments, or formatting. Orthogonal damage is the #1 source of unexpected regressions from agents.
+- Database schema changes or migrations.
+- Adding new dependencies.
+- Changing auth logic, permissions, or access control.
+- Modifying API contracts that other services consume.
+- Any architectural decision not covered by the spec.
+
+**NEVER — these are non-negotiable, enforce in hooks and CI:**
+
+- **Do not improve adjacent code.** Do not "clean up" surrounding code, comments, or formatting. Orthogonal damage is the #1 source of unexpected regressions from agents.
 - **Do not suppress errors.** Never catch an exception and silently continue. Never replace an error with a default value unless the spec explicitly requires it. Suppressed errors become production mysteries.
 - **Do not create files unless necessary.** Prefer editing existing files. New files mean new imports, new test files, new mental overhead. Justify every new file.
 - **Do not hallucinate imports or APIs.** If you are unsure whether a function, module, or package exists, search for it. Do not guess and hope it compiles.
 - **Do not exceed scope.** If the spec says "add a discount field," do not also add a coupon system, a discount history table, and an admin UI for managing discounts.
-- **Do not guess. Ask.** When you encounter ambiguity — an unclear requirement, an architectural decision with multiple valid paths, an interface you are unsure exists — stop and ask. Do not pick a direction and hope it is right. A wrong guess costs more than the interruption of asking. This is non-negotiable.
+- **Do not guess. Ask.** When you encounter ambiguity — an unclear requirement, an architectural decision with multiple valid paths, an interface you are unsure exists — stop and ask. A wrong guess costs more than the interruption of asking.
+- **Do not commit .env files, secrets, or credentials.** Do not skip type checks or linter passes.
 
 ### Constrain Agents Programmatically
 
@@ -707,6 +740,23 @@ If an agent makes the same class of mistake twice, do not just fix the code. Upd
 4. If yes: add an explicit rule to the project rules file.
 5. If the rule cannot be enforced by text alone: add a linter rule, pre-commit hook, or CI check.
 ```
+
+### Intent Drift
+
+Intent drift is the gradual divergence between what you meant to build and what the code actually does. It is not new to software — but AI agents accelerate it dangerously.
+
+When a spec is incomplete, the agent fills gaps with statistically likely defaults from its training data. These defaults are plausible for generic systems but may be wrong for your specific business rules. The result is code that passes tests, looks correct in review, and quietly does the wrong thing in production.
+
+Intent drift is hardest to catch because the code is not broken — it is confidently misaligned.
+
+Signs that intent drift is happening:
+
+- Review keeps finding behavior the spec never mentioned. The agent invented it.
+- Users report "it works but it's not what I expected" after launch.
+- A feature passes all tests but a manual walkthrough reveals wrong defaults, missing constraints, or inverted logic.
+- A new agent session "improves" an earlier decision because the rationale was never written down.
+
+The fix is upstream. If review consistently finds behavior the spec did not specify, your specs are not detailed enough on boundaries. If undocumented decisions keep getting relitigated, your decision log is missing entries. Intent drift is a spec quality problem, not an implementation problem.
 
 ### Specs: Track What Works
 
