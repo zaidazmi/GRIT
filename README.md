@@ -32,7 +32,7 @@ SPEC -> TEST -> IMPLEMENT -> REVIEW -> HARDEN -> SHIP
   |_____________ route findings back _______________|
 ```
 
-Every non-trivial feature follows this cycle, but the weight changes with the risk. A tiny UI change may only need a compact spec and visual proof. A payments or auth change needs the full loop, rollback thinking, and adversarial review. The spec is your leverage. The tests or manual checks are your proof. Findings route back to the phase that caused them, not patched over downstream.
+Every non-trivial feature follows this cycle, but the weight changes with the risk. A tiny UI change may only need a compact spec and visual proof. A payments or auth change needs the full loop, rollback thinking, and adversarial review. Intent and expectations are your leverage. Tests or manual checks are your proof. Findings route back to the phase that caused them, not patched over downstream.
 
 ---
 
@@ -42,7 +42,7 @@ Every non-trivial feature follows this cycle, but the weight changes with the ri
 
 | # | Section | What it covers |
 |---|---------|----------------|
-| 1 | **The Loop** | Mode selection, challenge premise, spec, test, implement, review, harden, ship |
+| 1 | **The Loop** | Mode selection, intent, expectations, context, test, implement, review, harden, ship |
 | 2 | **Context Hygiene** | How to feed agents without poisoning them with stale history |
 | 3 | **Agent Constraints** | Non-negotiable rules, programmatic enforcement, what agents must never do |
 | 4 | **Architecture Principles** | Pure core / effectful shell, premature abstraction traps |
@@ -71,7 +71,7 @@ Works with **Claude Code, Cursor, Codex, Windsurf, Copilot, Gemini CLI** — any
 
 1. Read [GRIT.md](GRIT.md).
 2. Pick a mode: Spike, Quick Ship, or Risky Ship.
-3. Write the smallest spec that preserves intent. For existing systems, describe only what changes.
+3. Write the smallest contract that preserves intent and expectations. For existing systems, describe only what changes.
 4. Build, verify with tests or a manual proof, run a fresh review, then ship with a rollback path.
 5. When a mistake recurs, add it to your rules file. The system gets smarter.
 

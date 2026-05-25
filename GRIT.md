@@ -96,23 +96,33 @@ Most of the time the answers confirm "yes, build it" and you move on. The writte
 
 Write a lean behavioral contract before touching code. This is your real prompt to the AI, not a claim that you already understand every edge case.
 
+Separate the contract into three parts:
+
+- **Intent** - the outcome you want and why it matters.
+- **Expectations** - what counts as done, what counts as failed, and what must stay out of bounds.
+- **Context** - the existing system facts the agent needs to implement without guessing.
+
+Do not let one sprawling document blur these together. The human owns intent and expectations. The agent can help discover context, but it should not invent what "done" means.
+
 A useful spec contains:
 
-- **What it does** - 2-3 sentences in plain English.
-- **Inputs and outputs** - data shapes, types, return values, errors.
-- **Edge cases** - empty, null, malformed, concurrent, maximum, expired, unauthorized.
-- **Does not do** - explicit boundaries that prevent scope creep.
+- **Intent** - what outcome this creates for the user or system.
+- **Expectations** - success scenarios, failure scenarios, edge cases, and explicit non-goals.
+- **Connections** - adjacent workflows, domain rules, APIs, data, or prior decisions this change may touch.
+- **Context needed** - files, interfaces, patterns, or constraints the agent must inspect before coding.
 - **Uncertainty** - unresolved decisions marked clearly.
 
 For fast changes, a compact spec is enough:
 
 ```text
-GOAL:
+INTENT:
 USER VALUE:
-CHANGE:
+EXPECTATIONS:
+SUCCESS SCENARIOS:
+FAILURE SCENARIOS:
+CONNECTIONS:
+CONTEXT NEEDED:
 DOES NOT DO:
-LIKELY FILES/AREAS:
-EDGE CASES:
 TEST OR MANUAL CHECK:
 ROLLBACK:
 UNCLEAR:
@@ -145,8 +155,13 @@ For existing systems, prefer delta specs over restating the whole product. Descr
 CURRENT BEHAVIOR:
 NEW BEHAVIOR:
 WHAT STAYS THE SAME:
+CONNECTIONS:
+SUCCESS SCENARIOS:
+FAILURE SCENARIOS:
 ROLLBACK:
 ```
+
+For risky work, run the hole test before implementation: hand the intent and expectations to a fresh reviewer, or a fresh model context, and ask where the agent would still have to guess. Close those holes before coding. The goal is not to specify the whole system; it is to remove the guesses that would change the outcome.
 
 Specs are living hypotheses, not waterfall gates. If implementation reveals a missing case, update the spec, add or revise the tests, then change the code. The spec becomes stronger because you built against it, not because you guessed perfectly upfront.
 
@@ -221,6 +236,16 @@ Do not add features that are not in the spec.
 **One logical change per pass.** Do not ask the agent to build an entire feature in a single shot. Each pass should be one coherent unit — a new endpoint with its types, handler, service, query, and tests counts as one unit even if it touches 12 files. The limit is not file count; it's whether the agent can hold the full change in context without contradicting itself or forgetting to propagate updates. When the scope is too large for the context window, split by vertical slice, not by arbitrary file limits.
 
 Use a fresh context for implementation when the prior conversation was long, exploratory, or full of failed attempts. Long conversations carry stale assumptions.
+
+**Presence beats approval.** For risky work, do not disappear until the final diff. Stay in the loop at the moments where human judgment matters: intent, expectations, first implementation checkpoint, and review. A late approval on a diff too large to truly read is not the same as ownership.
+
+Ask the agent to pause before irreversible or high-blast-radius moves:
+
+```text
+Before changing data models, auth, billing, permissions, migrations,
+or public contracts, stop and show the intended change, affected
+connections, rollback path, and verification plan.
+```
 
 **Know when to bail out.** If the agent needs more than two correction cycles on a single task, stop and diagnose before trying again. Either the task is too large (the agent cannot hold all the moving parts in context), the spec is too vague (the agent is guessing to fill gaps), or the problem is a bad fit for the current model (complex state machines, subtle concurrency, nuanced protocol work). Split the task, enrich the spec, or write the hard part by hand. A third correction cycle almost never produces what the first two failed to.
 
@@ -346,14 +371,14 @@ One feature per conversation is a useful default.
 
 ### Provide the Right Context
 
-Do not dump the whole codebase into the prompt. Give the AI:
+Do not dump the whole codebase into the prompt or mix all context into the intent. Give the AI:
 
 - The spec for this feature.
 - The tests it needs to pass.
 - The interfaces and types it must obey.
 - The small set of files it must integrate with.
 
-More context is not always better. Irrelevant context competes with the task.
+More context is not always better. Irrelevant context competes with the task. Let the agent search for implementation context progressively, then summarize what it found before editing.
 
 ### Watch for Context Degradation
 
