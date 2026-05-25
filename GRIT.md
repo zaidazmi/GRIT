@@ -69,6 +69,14 @@ SPEC -> TEST -> IMPLEMENT -> REVIEW -> HARDEN -> SHIP
   |_____________ route findings back ______________|
 ```
 
+For day-to-day work, choose the lightest mode that still protects the user:
+
+| Mode | Use when | Minimum bar |
+| --- | --- | --- |
+| **Spike** | Exploring an idea you may throw away | No ceremony, but spike code does not ship until reviewed or rewritten |
+| **Quick Ship** | Small or medium changes with clear intent | Compact spec, search first, test or manual proof, fresh review, rollback path |
+| **Risky Ship** | Auth, money, user data, migrations, destructive actions, security, or hard-to-undo behavior | Full loop, automated tests, hardening, adversarial review, rollback/monitoring plan |
+
 ### Step 0: Challenge the Premise
 
 Before writing a spec, answer these four questions in one line each. Write the answers at the top of the spec file — they take 60 seconds and they prevent the most expensive class of bug: a well-implemented feature that should not exist.
@@ -96,6 +104,20 @@ A useful spec contains:
 - **Does not do** - explicit boundaries that prevent scope creep.
 - **Uncertainty** - unresolved decisions marked clearly.
 
+For fast changes, a compact spec is enough:
+
+```text
+GOAL:
+USER VALUE:
+CHANGE:
+DOES NOT DO:
+LIKELY FILES/AREAS:
+EDGE CASES:
+TEST OR MANUAL CHECK:
+ROLLBACK:
+UNCLEAR:
+```
+
 Example:
 
 ```text
@@ -116,6 +138,15 @@ UNCLEAR: Should tax be calculated before or after discount?
 ```
 
 Resolve every blocking unclear item before tests. If an open question does not block the first slice, write down the current assumption and continue.
+
+For existing systems, prefer delta specs over restating the whole product. Describe only what changes:
+
+```text
+CURRENT BEHAVIOR:
+NEW BEHAVIOR:
+WHAT STAYS THE SAME:
+ROLLBACK:
+```
 
 Specs are living hypotheses, not waterfall gates. If implementation reveals a missing case, update the spec, add or revise the tests, then change the code. The spec becomes stronger because you built against it, not because you guessed perfectly upfront.
 
@@ -164,6 +195,8 @@ test("returns an error for negative quantities", async () => {})
 ```
 
 It is fine to have the AI draft the tests from the spec. You still review them. Watch for tests that only confirm the implementation shape instead of the behavior.
+
+For low-risk UI, copy, or configuration changes, a manual proof can replace an automated test. Write the exact observation before shipping: browser path, CLI command, API request, screenshot, log line, or other evidence that proves the change works.
 
 Prefer vertical slices: one failing test, make it pass, then the next test. For bug fixes, first write the failing test that reproduces the bug. If the bug was never reproduced, the fix is mostly theater.
 
@@ -217,6 +250,7 @@ Find:
 - Logic bugs and silent failures
 - Security issues
 - Spec violations
+- Implementation that passes tests but drifts from the agreed intent
 - Missing edge cases
 - Weak or tautological tests
 - Unnecessary scope added by the implementation
@@ -274,10 +308,12 @@ This can be a separate agent pass or a human review. Automate what you can with 
 2. Type checks pass.
 3. Linter passes.
 4. For user-facing changes: the feature works in the running app (not just in tests).
+5. For changes that affect users, data, billing, auth, or availability: the rollback path is known.
+6. After deploy: observe the relevant path, logs, metrics, or error tracker long enough to catch obvious breakage.
 
 No optimistic declarations of success. "I believe this should work" is not verification. "Tests pass, I checked the UI, here is what I confirmed" is verification.
 
-Ship after the code passes tests, checks, and adversarial review. Do not polish what does not need polishing. Do not expand scope at the finish line.
+Ship after the code passes tests, checks, and adversarial review. Then do a short post-ship observation pass. Do not polish what does not need polishing. Do not expand scope at the finish line.
 
 ### When to Scale the Process
 
@@ -285,9 +321,9 @@ Rigor should be proportional to risk, complexity, and uncertainty. The loop is f
 
 | Situation | Minimum rigor |
 | --- | --- |
-| Copy, comments, tiny config | Lightweight review |
-| UI-only styling or layout | One-line spec, visual check |
-| Core logic | Full loop |
+| Copy, comments, tiny config | One-shot check |
+| UI-only styling or layout | Compact spec, visual check |
+| Core logic | Quick Ship or full loop |
 | Data model change | Full loop plus migration test |
 | External API integration | Full loop plus mock or sandbox test |
 | Auth, money, user data | Full loop plus cross-model review |
