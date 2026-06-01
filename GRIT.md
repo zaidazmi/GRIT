@@ -237,6 +237,17 @@ Do not add features that are not in the spec.
 
 Use a fresh context for implementation when the prior conversation was long, exploratory, or full of failed attempts. Long conversations carry stale assumptions.
 
+**Use Codex Goals when the finish line is clear but the path is uncertain.** Goals fit Quick Ship and Risky Ship work such as flaky tests, performance tuning, migrations, bug hunts, benchmarks, and research or audit tasks. Treat a Goal as an execution contract, not a replacement for GRIT.
+
+```text
+/goal <INTENT>, verified by <TEST OR MANUAL CHECK>,
+while preserving <EXPECTATIONS / DOES NOT DO>.
+Use <CONTEXT NEEDED / BOUNDARIES>.
+Between iterations, record what changed, what evidence was gathered,
+and the next best action. If blocked, stop with attempted paths,
+evidence, blocker, and next input needed.
+```
+
 **Presence beats approval.** For risky work, do not disappear until the final diff. Stay in the loop at the moments where human judgment matters: intent, expectations, first implementation checkpoint, and review. A late approval on a diff too large to truly read is not the same as ownership.
 
 Ask the agent to pause before irreversible or high-blast-radius moves:
@@ -246,6 +257,8 @@ Before changing data models, auth, billing, permissions, migrations,
 or public contracts, stop and show the intended change, affected
 connections, rollback path, and verification plan.
 ```
+
+For risky Goals, make that pause rule part of the Goal text itself.
 
 **Know when to bail out.** If the agent needs more than two correction cycles on a single task, stop and diagnose before trying again. Either the task is too large (the agent cannot hold all the moving parts in context), the spec is too vague (the agent is guessing to fill gaps), or the problem is a bad fit for the current model (complex state machines, subtle concurrency, nuanced protocol work). Split the task, enrich the spec, or write the hard part by hand. A third correction cycle almost never produces what the first two failed to.
 
