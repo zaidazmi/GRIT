@@ -1,142 +1,123 @@
 # Quick Ship Playbook
 
-This is GRIT’s default shipping playbook. Start here for every normal product or engineering change. Read [GRIT.md](../GRIT.md) for the governing principles. If this playbook conflicts with project instructions or the task contract, surface the conflict before editing.
+This is GRIT’s default shipping playbook. Start here for every product or engineering change that may ship.
 
-Switch to [Risky Ship](risky-ship.md) only if investigation reveals authentication or permissions, payments, sensitive user data, a database migration, a destructive action, a public API or dependent contract, or a change that is difficult to undo.
+Add [Risky Ship](risky-ship.md) when the change touches authentication, permissions, security boundaries, or agents taking consequential actions; payments; sensitive user data; database migrations; destructive actions; public APIs or contracts other systems depend on; or changes that are difficult to undo. Add the [Autonomous Loop](autonomous-loop.md) when work is recurring, scheduled, unattended, or must continue across context boundaries.
 
 ## Minimum bar
 
-- A compact behavioral contract.
-- A clean baseline or recorded pre-existing failures.
-- Search before creating new code.
-- An automated test or exact manual proof.
-- A fresh review against the contract.
-- A rollback path and, for user-facing changes, a short observation window.
+- A Build Contract with intent, boundaries, proof, and rollback.
+- A known baseline or recorded pre-existing failures.
+- Search before creating code or dependencies.
+- An automated check or exact manual proof.
+- One coherent vertical slice at a time.
+- A fresh review against the Build Contract.
+- Short post-release observation for user-facing changes.
 
-If none of those visible triggers applies, remain in Quick Ship. Do not add Risky Ship ceremony merely because a change is technically interesting or the agent can generate a longer plan.
+## 1. Agree the Build Contract
 
-## 1. Write the contract
+Use only the fields the change needs, but do not omit intent, boundaries, proof, or rollback.
 
-Use only the fields the change needs, but do not omit intent, boundaries, or proof.
+Before writing it, ask whether the problem is real and worth solving, whether the capability already exists, and what happens if nothing is built.
 
 ```text
-INTENT:
-USER VALUE:
-CURRENT BEHAVIOR:
-NEW BEHAVIOR:
-WHAT STAYS THE SAME:
-SUCCESS SCENARIOS:
-FAILURE OR EDGE SCENARIOS:
-CONNECTIONS:
-CONTEXT TO INSPECT:
-DOES NOT DO:
-TEST OR MANUAL PROOF:
+PROBLEM AND EVIDENCE:
+SMALLEST USEFUL CHANGE:
+CURRENT BEHAVIOR: [optional for new behavior]
+EXPECTED BEHAVIOR:
+EXPECTED OUTCOME: [optional for non-product work]
+WHAT MUST STILL WORK:
+NON-GOALS:
+CONTEXT, RISKS, AND CONNECTIONS:
+PROOF:
 ROLLBACK:
-UNCLEAR OR ASSUMED:
+OPEN DECISIONS:
 ```
 
-For new behavior, `CURRENT BEHAVIOR` and `WHAT STAYS THE SAME` may be omitted. For an existing system, prefer this delta contract over restating the whole product.
+For an existing system, describe the delta rather than restating the whole product. A reversible, low-risk assumption may be recorded and tested. Escalate decisions affecting product intent, architecture, public contracts, data, security, permissions, cost, or irreversible state.
 
-Resolve blocking uncertainty before implementation. A reversible, low-risk assumption may be recorded and tested. Escalate choices that affect intent, architecture, public contracts, data, security, permissions, cost, or irreversible state.
+The Build Contract is authoritative for the current pass. When implementation reveals a missing case or changed requirement, update the contract and proof before the code.
 
-### Example
-
-```text
-FEATURE: Order Total Calculator
-
-DOES: Takes line items + optional discount code. Returns subtotal, discount, tax, total.
-INPUTS: { items: LineItem[], discountCode?: string, taxRate: number }
-OUTPUTS: { subtotal: number, discount: number, tax: number, total: number }
-
-EDGE CASES:
-- Empty items array returns all zeros.
-- Invalid discount code is ignored.
-- Negative quantity returns a validation error.
-
-DOES NOT: Persist order. Validate inventory. Charge payment.
-UNCLEAR: Should tax be calculated before or after discount?
-```
-
-## 2. Establish the baseline
+## 2. Investigate and establish proof
 
 Before editing:
 
-1. Read the root and directory-scoped agent instructions.
-2. Search for existing implementations, utilities, tests, interfaces, and naming patterns.
-3. Run the smallest relevant test, build, type, or lint command.
-4. Record any existing failure so it cannot be hidden inside the change.
+1. Read applicable project instructions.
+2. Search for existing implementations, patterns, interfaces, and tests.
+3. Run the smallest relevant baseline check.
+4. Record pre-existing failures.
+5. Identify what would distinguish success from a plausible-looking change.
+6. Recommend the smallest technical approach and surface consequential questions.
 
-Every fresh session starts blind. Give the agent the contract, relevant interfaces, and pointers to authoritative context. Let it retrieve implementation details progressively instead of pasting the entire repository into the prompt.
+Meaningful deterministic behavior normally needs a happy path, an edge case, and an error or boundary case. Reproduce a bug before accepting its fix. Low-risk visual, copy, or configuration work may use an exact manual walkthrough, screenshot, command, response, or log instead of an automated test.
 
-## 3. Create the proof
+An agent may draft the checks, but review them for tautology and implementation coupling.
 
-For behavior that matters, start with at least:
-
-- One happy path.
-- One edge case.
-- One error or boundary case.
-
-For a bug, reproduce it first with a failing test or exact observable procedure. If the bug was never reproduced, the fix is mostly theater.
-
-An agent may draft tests, but review them for tautology and implementation coupling. For low-risk UI, copy, or configuration changes, an exact manual proof may replace an automated test: browser path, CLI command, API request, screenshot, log line, or another observable result.
-
-## 4. Implement one vertical slice
+## 3. Implement one vertical slice
 
 ```text
-Implement the smallest change that satisfies this contract and its proof.
-Search the repository before creating code.
+Implement the smallest coherent change that satisfies the Build Contract.
+Search before creating code or adding dependencies.
 Follow established interfaces and patterns.
 Do not add behavior outside the contract.
-If a consequential decision is unclear, stop and surface it.
+Stop for consequential decisions.
 ```
 
-One logical change may touch many files. The limit is coherence, not file count. Split work by independently useful vertical slices rather than arbitrary layers or file limits.
+One slice may touch many files. The limit is whether it can be understood and verified independently, not an arbitrary file count.
 
-If implementation reveals that the contract is wrong or incomplete, update the contract and proof before changing the code again. Do not leave the next session with a stale description of reality.
+Record consequential assumptions and structural decisions where the next session can find them. After two failed correction cycles without meaningful new evidence, stop patching and diagnose the contract, proof, context, task size, or technical approach.
 
-Record structural decisions made during implementation: what was chosen, why, and which alternatives were rejected. One useful line is enough.
+## 4. Verify the result
 
-Two failed correction cycles without meaningful new evidence are a default diagnostic trigger: stop patching, classify the failure, and either repair the contract or proof, decompose the task, reset context, or escalate. A project may tune the number, but should keep a concrete no-progress threshold.
+After implementation:
+
+1. Run the agreed proof and relevant project checks from the known baseline.
+2. Exercise user-facing behavior in the running system where practical.
+3. Confirm behavior that must remain unchanged still works.
+4. Preserve the command, result, screenshot, response, or log needed to reproduce the conclusion.
+
+If the proof is weak or the contract changed, fix that upstream before continuing.
 
 ## 5. Run a fresh review
 
-Use a fresh context and provide the contract, proof, and diff.
+Use a fresh context and provide the Build Contract, plan, diff, and evidence.
 
 ```text
-Review this change against the contract. Be adversarial.
+Review this change against the Build Contract. Be adversarial.
 
 Find:
 - Logic bugs and silent failures
-- Security or privacy issues
+- Security, privacy, or permission issues
 - Contract violations and intent drift
 - Missing preservation, edge, or failure cases
-- Weak or tautological tests
+- Weak or tautological proof
 - Unnecessary scope
 
-Return findings by severity. For each finding, route it to the
+Return findings by severity and route each one to the
 contract, proof, implementation, or project constraint that must change.
 ```
 
-Review the plan and intent before reading the diff line by line. The plan explains why; the diff proves what happened.
+The reviewer should understand the intent before reading the diff. Independence and access to evidence matter more than brand or model diversity.
 
-## 6. Route and finish
+## 6. Route, harden, and ship
 
 | Finding | Route to |
 | --- | --- |
-| Contract is ambiguous or missing behavior | Update the contract, then cascade |
-| Proof misses a real scenario | Add the test or manual check, then re-implement |
-| Implementation violates the contract | Fix the implementation |
-| Implementation works but the contract was wrong | Update the contract and proof, then cascade |
+| Intent or behavior is ambiguous | Build Contract, then proof and implementation |
+| Proof misses a real scenario | Proof definition or check, then implementation |
+| Implementation violates a correct contract | Implementation |
+| Environment prevents reliable work | Tooling, context, or observability |
 
 Before completion:
 
-- [ ] Relevant tests pass from a known baseline.
-- [ ] Type checks and lint pass where applicable.
+- [ ] Relevant tests, type checks, and lint pass from a known baseline.
 - [ ] User-facing behavior was exercised in the running system.
 - [ ] The diff contains only the intended logical change.
-- [ ] The fresh review has no unresolved blocking findings.
-- [ ] Evidence is recorded: commands, results, screenshots or traces where relevant.
-- [ ] The rollback path is known.
-- [ ] A user-facing change has an observation owner, window, and rollback threshold.
+- [ ] Fresh review has no unresolved blockers.
+- [ ] Evidence is reproducible.
+- [ ] Rollback is known.
+- [ ] A user-facing change has an observation owner and window.
 
-The agent saying “done” is not evidence. Completion is an observed state that satisfies the contract.
+Harden only against applicable risks discovered during investigation, verification, or review. If a Risky Ship trigger appears later, pause and add its requirements before continuing.
+
+The agent saying “done” is not evidence. Completion is an observed state that satisfies the Build Contract.

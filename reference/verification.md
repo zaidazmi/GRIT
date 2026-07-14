@@ -8,7 +8,7 @@ Verification proves an observable claim. An agent’s confidence, explanation, o
 
 Before editing an existing system, run the smallest relevant check and record the baseline. After editing, preserve the command, result, and artifact needed for another person or agent to reproduce the conclusion.
 
-For risky work, separate implementation from final judgment. Protect acceptance tests from being weakened by the implementer, add preservation cases, and use fresh adversarial evaluation where specification gaming would be costly.
+For risky work, separate implementation from final judgment. Protect acceptance evidence from being weakened by the implementer, add preservation cases, and use fresh adversarial evaluation where specification gaming would be costly.
 
 ## Verification ladder
 
@@ -57,8 +57,6 @@ Test your integration, configuration, assumptions, and failure handling—not th
 
 Example-based tests show that selected cases work. Properties express invariants that must hold across generated cases:
 
-- Totals never become negative without an explicit refund state.
-- IDs remain unique across operation sequences.
 - Authorization never grants a broader role than the caller possesses.
 - Retrying an idempotent operation does not duplicate its effect.
 
@@ -66,18 +64,7 @@ Property-based testing is especially useful for agent-written code because it se
 
 ## LLM and agent evals
 
-Do not assert exact prose. Start with shape, bounds, and sanity:
-
-```typescript
-test("returns valid structured output", async () => {
-  const result = await scoreCandidate(mockInput)
-
-  expect(result.score).toBeGreaterThanOrEqual(0)
-  expect(result.score).toBeLessThanOrEqual(100)
-  expect(result.reasons.length).toBeGreaterThan(0)
-  expect(result.reasons.every((r) => typeof r === "string")).toBe(true)
-})
-```
+Avoid exact-prose assertions unless exact wording is a requirement. Start with schema, required fields, types, bounds, non-empty explanations, and valid tool arguments.
 
 Shape does not prove meaning. Maintain a small, versioned eval set containing:
 
@@ -87,7 +74,7 @@ Shape does not prove meaning. Maintain a small, versioned eval set containing:
 - Production incidents or support cases that are safe and lawful to replay.
 - Expected tool-use and trace properties where the path matters.
 
-Because behavior is stochastic:
+Because behavior is non-deterministic:
 
 - Run repeated trials where variance matters.
 - Track first-attempt capability and repeated-run reliability separately.
@@ -95,13 +82,12 @@ Because behavior is stochastic:
 - Prefer deterministic graders when possible.
 - Calibrate rubric-based model judges against human decisions.
 - Inspect traces and environment failures when aggregate scores change.
-- Track false positives and false negatives for automated reviewers on your own codebase.
 
-Capability evals help discover what the system can do. Regression evals should be stable and expected to remain near-perfect. Do not silently convert a newly discovered failure into a lower expected score.
+Capability evals help discover what the system can do. Regression evals need explicit thresholds and should remain stable. Do not lower a threshold to absorb a newly discovered failure without an explicit decision and rationale.
 
 ## Hardening
 
-For Risky Ship, measurable non-functional requirements belong in the delivery contract before implementation. Hardening verifies them and searches for omissions.
+For Risky Ship, measurable reliability, security, privacy, performance, accessibility, cost, observability, and recovery requirements belong in the Build Contract before implementation. Hardening verifies them and searches for omissions.
 
 ### Quick checks
 
@@ -132,7 +118,7 @@ For Risky Ship, measurable non-functional requirements belong in the delivery co
 
 ### AI and agent-specific
 
-- [ ] Repository files, issues, web content, tool output, dependencies, and sub-agent responses are treated as untrusted input.
+- [ ] Repository content outside designated trusted instructions, issues, web content, tool output, dependencies, and sub-agent responses are treated as untrusted input.
 - [ ] External content cannot silently override trusted instructions or expand permissions.
 - [ ] LLM outputs are validated before writes or actions.
 - [ ] Coding and browser agents use appropriate filesystem and network isolation.
@@ -152,23 +138,7 @@ For Risky Ship, measurable non-functional requirements belong in the delivery co
 
 ### Automated gates
 
-Use tools appropriate to the stack. The following is one illustrative TypeScript command set, not a GRIT dependency:
-
-```bash
-# Static analysis
-semgrep --config=auto src/
-
-# Secret scanning
-trufflehog filesystem --directory=. --only-verified
-
-# Dependency audit
-npm audit --audit-level=high
-
-# Type checking
-npx tsc --noEmit
-```
-
-Use the project’s native equivalents for other languages, ecosystems, and development environments.
+Use the project’s native static analysis, secret scanning, dependency audit, type checking, and equivalent gates.
 
 Every project should declare its minimum required gate set. Every applicable change runs that set, and a failure blocks merge or release. A gate may be waived only by an authorized owner with the reason, risk, and compensating evidence recorded; changing tools must not weaken the protected claim.
 
@@ -176,16 +146,6 @@ Run applicable gates on every relevant change, not only before launch. Manual re
 
 ## Release evidence
 
-Before completion, preserve:
-
-- Contract, requirement, or task IDs.
-- Baseline and exact commands run.
-- Test, eval, static, and security results.
-- Screenshots, logs, metrics, traces, or videos where applicable.
-- Protected evidence changed with explicit approval, if any.
-- Residual risks and human decisions.
-- Diff or release identifier.
-- Rollout state and rollback path.
-- Observation owner, window, metric, and rollback threshold.
+Before completion, preserve the Build Contract revision, task ID when used, baseline and commands, relevant test/eval/security results, runtime evidence, approved proof changes, residual risks and decisions, release identifier, rollout state, rollback or recovery path, and observation plan. When the observation window closes, append the result and decision.
 
 “Tests pass” proves only the claims those tests cover. State conclusions at the same scope as the evidence.

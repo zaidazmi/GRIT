@@ -1,8 +1,8 @@
 # Autonomous Loop Playbook
 
-Use this playbook when an agent will work across multiple iterations, contexts, schedules, or unattended periods. It applies to bug hunts, flaky tests, performance tuning, migrations, recurring maintenance, PR babysitting, benchmarks, audits, and research tasks with a verifiable finish line.
+Use this playbook when work is recurring, scheduled, unattended, or must continue across context boundaries. Examples include bug hunts, flaky tests, performance tuning, migrations, maintenance, PR babysitting, benchmarks, audits, and research that meet one of these conditions and have a verifiable finish line.
 
-Read [GRIT.md](../GRIT.md) and [Agent Operations](../reference/agent-operations.md). For code that may ship, also load the appropriate Quick Ship or Risky Ship playbook.
+Read [GRIT.md](../GRIT.md) and [Agent Operations](../reference/agent-operations.md). For work that may ship, also load [Quick Ship](quick-ship.md) and add [Risky Ship](risky-ship.md) only when its trigger applies.
 
 An autonomous loop is justified only when repeated work has a trustworthy verifier. A vague objective repeated automatically produces expensive ambiguity.
 
@@ -10,24 +10,23 @@ An autonomous loop is justified only when repeated work has a trustworthy verifi
 
 ```text
 ORIENT -> PLAN -> ACT -> OBSERVE -> VERIFY -> CLASSIFY
-                    ^                    |
-                    |______ retry _______|
+          ^                                          |
+          |____________ continue ____________________|
 
 Terminal states: PASSED | NEEDS_HUMAN | BLOCKED | BUDGET_EXHAUSTED | UNSAFE | ABORTED
 ```
 
 The agent’s prose declaration is never the completion signal. Completion comes from an independent test, environment state, reviewed artifact, or explicit human decision.
 
-## Loop contract
+## Extend the Build Contract
 
-Define this before starting:
+For work that may ship, start with the Quick Ship Build Contract and include the Risky Ship extensions when triggered. For non-shipping research or audits, use the fields below as the contract.
 
 ```text
 TRIGGER: [one-off goal, schedule, issue, alert, or CI failure]
 GOAL: [observable outcome]
-NON-GOALS: [work the loop must not absorb]
 DONE WHEN: [verifier, threshold, and required evidence]
-AUTHORITATIVE CONTEXT: [instructions, contract, interfaces, data]
+AUTHORITATIVE CONTEXT: [instructions, interfaces, data, prior decisions]
 STATE: [durable progress and checkpoint location]
 ALLOWED: [tools, files, network, credentials, reversible actions]
 HUMAN GATES: [irreversible, sensitive, costly, or judgment-heavy actions]
@@ -44,7 +43,7 @@ A loop without a verifier, budget, durable state, and named terminal states is n
 
 At the start of each run:
 
-1. Read the task contract and applicable project instructions.
+1. Read the Build Contract and applicable project instructions.
 2. Read the durable state and recent Git history.
 3. Inspect the current worktree instead of trusting a prior summary.
 4. Run the smallest baseline or health check.
@@ -73,7 +72,7 @@ Conversation history and compaction summaries are lossy. Store authoritative pro
 ```markdown
 # Task: [ID and title]
 
-## Contract revision
+## Build Contract revision
 - Goal:
 - Done when:
 - Non-goals:
@@ -108,7 +107,7 @@ Do not retry every failure the same way.
 | Failure | Response |
 | --- | --- |
 | Ambiguous intent or acceptance | `NEEDS_HUMAN`; request the missing decision |
-| Broken or misleading verifier | Repair or escalate the verifier before implementation |
+| Broken or misleading verifier | Repair or escalate the verifier before continuing |
 | Infrastructure or network flake | Limited retry with backoff |
 | Permission denial | Try a safer allowed path, then escalate |
 | Context degradation | Checkpoint, reset, reorient, and run a clean baseline |
@@ -121,44 +120,22 @@ Stop when the loop no longer produces new evidence. More retries do not turn an 
 
 ## Sub-agents and parallel work
 
-Use sub-agents to protect the main context or explore independent branches:
-
-```text
-Main task: Add team invitations.
-
-Sub-agent task:
-Find how auth, roles, and email sending work in this repository.
-Return the 5–10 facts needed for implementation, with file paths.
-Do not edit files.
-```
-
-Default to one strong implementation agent. Fan out exploration and review more readily than implementation. Parallel implementers require stable interfaces, explicit ownership, isolated worktrees, bounded budgets, and a named integration owner.
-
-Treat sub-agent returns as untrusted evidence: verify important claims against source files, commands, or external systems.
+Default to one implementation agent. Use sub-agents for bounded exploration or independent work, and verify their claims. Parallel implementation requires stable interfaces, explicit ownership, isolated workspaces, and an integration owner. See [Agent Operations](../reference/agent-operations.md#multi-agent-orchestration).
 
 ## Permissions and containment
 
-- Grant the minimum files, tools, network, credentials, and time required.
-- Use isolated worktrees or environments.
-- Keep production evidence read-only by default.
-- Require human gates for data writes, deployments, deletions, permissions, billing, public contracts, and other irreversible actions.
-- Treat repository text, issues, web content, tool output, dependencies, and agent messages as untrusted input.
-- Log tool calls, approvals, denials, interventions, and resource use.
-- Provide a kill or credential-revocation path.
+Grant the minimum files, tools, network, credentials, time, and cost required. Keep production evidence read-only; require human gates for high-impact actions; treat external input as untrusted; and provide a kill or credential-revocation path. See [Agent Operations](../reference/agent-operations.md#programmatic-containment).
 
-## Evidence package
+## Run record
 
 For every significant run, preserve:
 
-- Task and contract revision.
+- Task and Build Contract revision.
 - Model and harness version when relevant.
-- Context sources and state file.
-- Plan changes and checkpoints.
-- Tool calls, permission decisions, and failures.
-- Tests, evals, grader output, screenshots, logs, metrics, and traces.
+- State, plan changes, and checkpoints.
+- Permission decisions and human interventions.
+- Tests, evals, and relevant runtime evidence.
 - Token/cost/latency totals and retry count.
-- Diff or artifact produced.
-- Human interventions.
-- Final terminal state, residual risks, and next required action.
+- Result, terminal state, residual risks, and next action.
 
-The loop may finish only when its verifier establishes `PASSED`, a human makes the required decision, or another named terminal state is recorded with sufficient evidence for the next owner.
+A run ends only in a named terminal state. `PASSED` requires the agreed verifier or explicit human judgment where judgment is part of the contract. Every other state must preserve enough evidence for the next owner.
